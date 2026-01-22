@@ -2,11 +2,11 @@ import streamlit as st
 import pandas as pd
 import requests
 import os
-from dotenv import load_dotenv
+import streamlit as st
+import os
 
-load_dotenv()
+API_KEY = os.getenv("WEATHER_API_KEY") or st.secrets.get("WEATHER_API_KEY")
 
-API_KEY = os.getenv("OPENWEATHER_API_KEY")
 
 # Load the world cities CSV
 cities_df = pd.read_csv("worldcities.csv")
