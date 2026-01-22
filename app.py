@@ -1,66 +1,107 @@
 import streamlit as st
-import pandas as pd
 import requests
-import os
-import streamlit as st
-import os
+import pandas as pd
 
-API_KEY = os.getenv("WEATHER_API_KEY") or st.secrets.get("WEATHER_API_KEY")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(
+    page_title="Weather-Based Clothing Recommender",
+    page_icon="🌤️",
+    layout="centered"
+)
 
+# ---------------- CSS (DARK RESULT CARDS) ----------------
+st.markdown(
+    """
+    <style>
+    body {
+        background-color: #0f172a;
+    }
+    .weather-card {
+        background-color: #111827;
+        color: white;
+        padding: 20px;
+        border-radius: 14px;
+        margin-top: 20px;
+        box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+        font-size: 18px;
+    }
+    .recommend-card {
+        background-color: #064e3b;
+        color: #d1fae5;
+        padding: 18px;
+        border-radius: 14px;
+        margin-top: 15px;
+        font-size: 18px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-# Load the world cities CSV
-cities_df = pd.read_csv("worldcities.csv")
+# ---------------- API KEY ----------------
+API_KEY = st.secrets["WEATHER_API_KEY"]
 
-st.set_page_config(page_title="Weather-Based Clothing Recommender")
+# ---------------- TITLE ----------------
 st.title("🌤️ Weather-Based Clothing Recommender")
 
-# Dropdown to select country
-countries = cities_df['country'].unique()
-selected_country = st.selectbox("Select a Country", sorted(countries))
+# ---------------- LOAD CITY DATA ----------------
+df = pd.read_csv("worldcities.csv")
 
-# Filter cities by selected country
-filtered_cities = cities_df[cities_df['country'] == selected_country]
-city_names = filtered_cities['city'].unique()
-selected_city = st.selectbox("Select a City", sorted(city_names))
+countries = sorted(df["country"].unique())
+country = st.selectbox("Select a Country", countries)
 
-# Button to fetch weather
+cities = sorted(df[df["country"] == country]["city"].unique())
+city = st.selectbox("Select a City", cities)
+
+# ---------------- WEATHER FETCH ----------------
+def get_weather(city):
+    url = (
+        f"https://api.openweathermap.org/data/2.5/weather"
+        f"?q={city}&appid={API_KEY}&units=metric"
+    )
+    response = requests.get(url)
+    return response.json()
+
+# ---------------- CLOTHING LOGIC ----------------
+def clothing_recommendation(temp):
+    if temp < 10:
+        return "🧥 Very cold weather. Wear jacket, sweater, and warm clothes."
+    elif temp < 20:
+        return "🧥 Cool weather. Light jacket or hoodie recommended."
+    elif temp < 30:
+        return "👕 Pleasant weather. Wear comfortable clothes."
+    else:
+        return "🩳 Hot weather. Wear light cotton clothes."
+
+# ---------------- BUTTON ----------------
 if st.button("Get Recommendation"):
-    if selected_city:
-        country_code = filtered_cities[filtered_cities['city'] == selected_city]['iso2'].values[0]
+    data = get_weather(city)
 
-        if API_KEY:
-            url = f"http://api.openweathermap.org/data/2.5/weather?q={selected_city},{country_code}&appid={API_KEY}&units=metric"
-            response = requests.get(url)
+    if data.get("cod") != 200:
+        st.error("❌ Could not fetch weather data.")
+    else:
+        temp = data["main"]["temp"]
+        condition = data["weather"][0]["description"].title()
+        recommendation = clothing_recommendation(temp)
 
-            if response.status_code == 200:
-                data = response.json()
-                temp = data['main']['temp']
-                weather = data['weather'][0]['description'].capitalize()
+        # -------- WEATHER CARD --------
+        st.markdown(
+            f"""
+            <div class="weather-card">
+                🌤️ <b>Weather in {city}</b><br><br>
+                🌡️ Temperature: <b>{temp}°C</b><br>
+                ☁️ Condition: <b>{condition}</b>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
-                st.markdown(f"""
-                    <div style="background-color:#f0f8ff;padding:20px;border-radius:15px;box-shadow:0 4px 8px rgba(0,0,0,0.2);">
-                        <h3 style="color:#333;">🌤️ Weather in {selected_city}</h3>
-                        <p style="font-size:22px;margin:0;"><strong>🌡️ Temperature:</strong> {temp}°C</p>
-                        <p style="font-size:18px;"><strong>Condition:</strong> {weather}</p>
-                    </div>
-                """, unsafe_allow_html=True)
-
-                # Clothing recommendation
-                if temp > 30:
-                    recommendation = "🩳 It's hot! Wear light cotton clothes. Stay hydrated 💧"
-                elif 20 <= temp <= 30:
-                    recommendation = "👕 Pleasant weather. Wear comfortable clothes."
-                elif 10 <= temp < 20:
-                    recommendation = "🧥 It's cool. Carry a jacket."
-                else:
-                    recommendation = "🧣 Brrr! It's cold. Wear warm clothes."
-
-                st.markdown(f"""
-                    <div style="background-color:#e6ffe6;padding:15px;margin-top:15px;border-left:5px solid #00cc44;border-radius:10px;">
-                        <strong>{recommendation}</strong>
-                    </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.error("❌ Could not fetch weather data. Try a different location.")
-        else:
-            st.error("⚠️ API key not found. Please make sure it's set correctly in the .env file.")
+        # -------- RECOMMENDATION CARD --------
+        st.markdown(
+            f"""
+            <div class="recommend-card">
+                {recommendation}
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
